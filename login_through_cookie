@@ -1,0 +1,114 @@
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium import webdriver 
+from selenium.webdriver.chrome.service import Service as ChromeService
+from selenium.webdriver.common.by import By
+from time import sleep
+from selenium.webdriver.common.keys import Keys
+import pickle
+import pandas as pd
+from selenium.webdriver.common.proxy import Proxy, ProxyType
+import json
+import threading
+from dotenv import load_dotenv
+import os
+
+options=webdriver.ChromeOptions()
+options.add_experimental_option("detach", True)
+
+
+driver = webdriver.Chrome(options=options, service=ChromeService(ChromeDriverManager().install()))
+
+
+#code for login on social platform
+
+def linkedin_login(url, select_1st_field, select_2nd_field, button):
+    
+    driver.get(url)
+
+    sleep(3)
+    phone_or_email = input("Enter your phone or Email here :") 
+    password = input("Enter your password here :")
+
+    Email_or_Phone = driver.find_element(By.XPATH, select_1st_field)
+    Password = driver.find_element(By.XPATH, select_2nd_field)
+    
+    Email_or_Phone.send_keys(phone_or_email)
+    Password.send_keys(password)
+
+    button=driver.find_element(By.XPATH, button)
+    button.click()
+
+    sleep(5)
+    
+    cookies = driver.get_cookies()
+    with open("cookies.pk1", "w") as f:
+        json.dump(cookies, f)
+    
+    if "https://www.linkedin.com/feed/" in driver.current_url:
+        print("Logged in successfully")
+        save_login_attempts(0)
+    
+
+platform_credentials = {
+    "https://www.linkedin.com/login":("//input[contains(@aria-label, 'Email')] | //input[contains(@aria-label, 'Phone')]", "//input[@type = 'password']", "//button[@type='submit']")
+}
+
+for url, paths in platform_credentials.items():
+    linkedin_login(url, *paths)
+
+
+
+
+#code for cookies load and its checks if login attempts exceeded to 3 the cookies will be expire
+
+from selenium import webdriver
+import time
+import json
+
+def load_login_attempts():
+    try:
+        with open("login_attempts.txt", "r") as f:
+            login_attempts = int(f.read())
+    except FileNotFoundError:
+        login_attempts = 0
+    return login_attempts
+
+def save_login_attempts(count):
+    with open("login_attempts.txt", "w") as f:
+        f.write(str(count))
+
+driver = webdriver.Chrome()
+driver.get("https://www.linkedin.com")
+
+with open("cookies.pk1", "r") as f:
+    cookies = json.load(f)
+
+login_attempts = load_login_attempts()
+
+if login_attempts >= 3:
+    expiry_time = 0
+else:
+    expiry_time = int(time.time()) + (1 * 24 * 60 * 60)
+
+login_attempts += 1
+
+save_login_attempts(login_attempts)
+
+for cookie in cookies:
+    cookie['expiry'] = expiry_time
+
+for cookie in cookies:
+    driver.add_cookie(cookie)
+
+driver.refresh()
+is_expired = False
+current_time = time.time()
+for cookie in cookies:
+    if "expiry" in cookie and cookie["expiry"] < current_time:
+        is_expired = True
+        break
+
+if is_expired:
+    print("Cookies are expired.")
+else:
+    print("Cookies are still valid.")
